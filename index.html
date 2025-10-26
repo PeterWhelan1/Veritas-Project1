@@ -14,7 +14,7 @@
     p { color: var(--muted); line-height: 1.6; }
     .grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
     @media (min-width: 860px){ .grid { grid-template-columns: 1fr 1fr; } }
-    .plot { width: 100%; height: 420px; }
+    .plot { width: 100%; height: 420px; cursor: crosshair; }
     .tag { display:inline-block; padding:.25rem .5rem; border-radius: 999px; background:#26304f; color:#a9b8ff; font-size:.85rem; margin-right:.4rem; }
     button, input[type="submit"] { background:#4060ff; color:white; border:none; padding:.8rem 1rem; border-radius:10px; cursor:pointer; font-weight:600; }
     button:disabled, input[disabled]{ background:#2a2f45; cursor:not-allowed; }
@@ -82,51 +82,112 @@
     </footer>
   </div>
 
-  <!-- Load Plotly once, here, before your inline script -->
+  <!-- Load Plotly once, before inline script -->
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 
   <script>
-    const STEP = 0.04;
+    // --- Clickability tuning ---
+    const STEP = 0.01; // denser grid so clicks register easily
     const STORAGE_KEY = 'veritas_values_submitted_v1';
     const REQUIRED = ['present_a','present_b','present_c','future_a','future_b','future_c'];
 
-    function normalize(a,b){ let c = 1 - a - b; if(c<0){const s=a+b; a/=s; b/=s; c=0;} return [a,b,c]; }
-    function makeGrid(){ const A=[],B=[],C=[]; for(let a=0;a<=1;a+=STEP){ for(let b=0;b<=1-a;b+=STEP){ const [aa,bb,cc]=normalize(a,b); A.push(aa);B.push(bb);C.push(cc);} } return {type:'scatterternary',a:A,b:B,c:C,mode:'markers',marker:{size:2,opacity:0.01},hoverinfo:'skip'}; }
-    function makeUser(){ return {type:'scatterternary',a:[null],b:[null],c:[null],mode:'markers',marker:{size:10}}; }
-    function layout(){ return {ternary:{sum:1,aaxis:{title:'Accountability & Oversight (A)'},baxis:{title:'Community Safety (B)'},caxis:{title:'Civil Liberties & Privacy (C)'}},margin:{l:20,r:20,b:20,t:20},showlegend:false}; }
+    function normalize(a,b){
+      let c = 1 - a - b;
+      if (c < 0) { const s = a + b; a /= s; b /= s; c = 0; }
+      return [a,b,c];
+    }
 
-    function initPlot(id,prefix){
-      Plotly.newPlot(id,[makeGrid(),makeUser()],layout(),{displayModeBar:false, responsive:true});
-      const el=document.getElementById(id);
-      el.on('plotly_click',e=>{
-        if(!e.points || !e.points.length) return;
-        const p=e.points[0]; const a=p.a,b=p.b,c=p.c;
-        Plotly.restyle(el,{a:[[a]],b:[[b]],c:[[c]]},[1]);
-        document.getElementById(`${prefix}_a`).value=a.toFixed(3);
-        document.getElementById(`${prefix}_b`).value=b.toFixed(3);
-        document.getElementById(`${prefix}_c`).value=c.toFixed(3);
+    function makeGrid(){
+      const A=[],B=[],C=[];
+      for(let a=0; a<=1; a+=STEP){
+        for(let b=0; b<=1-a; b+=STEP){
+          const [aa,bb,cc]=normalize(a,b);
+          A.push(aa); B.push(bb); C.push(cc);
+        }
+      }
+      return {
+        type:'scatterternary',
+        a:A, b:B, c:C,
+        mode:'markers',
+        // Slightly larger & faintly visible so your clicks hit points
+        marker:{ size:10, opacity:0.05 },
+        hoverinfo:'skip',
+        showlegend:false
+      };
+    }
+
+    function makeUser(){
+      return {
+        type:'scatterternary',
+        a:[null], b:[null], c:[null],
+        mode:'markers',
+        marker:{ size:10 },
+        name:'Your choice'
+      };
+    }
+
+    function layout(){
+      return {
+        ternary:{
+          sum:1,
+          aaxis:{ title:'Accountability & Oversight (A)' },
+          baxis:{ title:'Community Safety (B)' },
+          caxis:{ title:'Civil Liberties & Privacy (C)' }
+        },
+        margin:{ l:20, r:20, b:20, t:20 },
+        showlegend:false
+      };
+    }
+
+    function initPlot(id, prefix){
+      const el = document.getElementById(id);
+      // Help touch devices accept taps rather than gestures
+      el.style.touchAction = 'manipulation';
+
+      Plotly.newPlot(id, [makeGrid(), makeUser()], layout(), { displayModeBar:false, responsive:true })
+        .then(() => Plotly.Plots.resize(el)); // ensure layout sizing is correct
+
+      el.on('plotly_click', (e) => {
+        if (!e.points || !e.points.length) return;
+        const p = e.points[0];
+        const a = p.a, b = p.b, c = p.c;
+        Plotly.restyle(el, { a:[[a]], b:[[b]], c:[[c]] }, [1]); // update user point
+        document.getElementById(`${prefix}_a`).value = a.toFixed(3);
+        document.getElementById(`${prefix}_b`).value = b.toFixed(3);
+        document.getElementById(`${prefix}_c`).value = c.toFixed(3);
         const ro = document.getElementById(`${prefix}-readout`);
-        if(ro) ro.textContent=`A=${(a*100).toFixed(1)}% • B=${(b*100).toFixed(1)}% • C=${(c*100).toFixed(1)}%`;
+        if (ro) ro.textContent = `A=${(a*100).toFixed(1)}% • B=${(b*100).toFixed(1)}% • C=${(c*100).toFixed(1)}%`;
         updateButton();
       });
     }
 
     function updateButton(){
-      const all=REQUIRED.every(id=>document.getElementById(id).value);
-      const consent=document.getElementById('consent').checked;
-      document.getElementById('submitBtn').disabled=!all||!consent||localStorage.getItem(STORAGE_KEY);
+      const all = REQUIRED.every(id => document.getElementById(id).value);
+      const consent = document.getElementById('consent').checked;
+      document.getElementById('submitBtn').disabled = !all || !consent || localStorage.getItem(STORAGE_KEY);
     }
 
-    document.addEventListener('DOMContentLoaded',()=>{
+    document.addEventListener('DOMContentLoaded', () => {
       initPlot('plot-present','present');
       initPlot('plot-future','future');
-      document.getElementById('consent').addEventListener('change',updateButton);
-      document.getElementById('values-form').addEventListener('submit',async e=>{
+      document.getElementById('consent').addEventListener('change', updateButton);
+
+      document.getElementById('values-form').addEventListener('submit', async (e) => {
         e.preventDefault();
-        const data=new FormData(e.target);
-        const res=await fetch(e.target.action,{method:'POST',body:data,headers:{'Accept':'application/json'}});
-        if(res.ok){localStorage.setItem(STORAGE_KEY,'1');document.getElementById('ok').style.display='block';}
-        else{document.getElementById('err').style.display='block';}
+        const data = new FormData(e.target);
+        // optional: include a coarse timestamp hour bucket
+        const d = new Date();
+        data.append('submitted_hour_utc', d.toISOString().slice(0,13)+':00');
+
+        const res = await fetch(e.target.action, { method:'POST', body:data, headers:{ 'Accept':'application/json' }});
+        if (res.ok) {
+          localStorage.setItem(STORAGE_KEY, '1');
+          document.getElementById('ok').style.display = 'block';
+          document.getElementById('err').style.display = 'none';
+        } else {
+          document.getElementById('err').style.display = 'block';
+          document.getElementById('ok').style.display = 'none';
+        }
         updateButton();
       });
     });
