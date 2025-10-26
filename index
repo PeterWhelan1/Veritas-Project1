@@ -5,8 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Veritas AI — Values Survey (Ternary)</title>
   <meta name="description" content="Help us map how society prioritises Accountability, Community Safety, and Civil Liberties — today and in 2075." />
-  <!-- Plotly.js CDN -->
-  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" defer></script>
   <style>
     :root { --bg: #0b1020; --fg: #e8ecf1; --muted: #9aa8b7; --card: #151c34; }
     html, body { margin:0; padding:0; background:var(--bg); color:var(--fg); font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
@@ -84,7 +82,9 @@
     </footer>
   </div>
 
+  <!-- Load Plotly once, here, before your inline script -->
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+
   <script>
     const STEP = 0.04;
     const STORAGE_KEY = 'veritas_values_submitted_v1';
@@ -92,19 +92,21 @@
 
     function normalize(a,b){ let c = 1 - a - b; if(c<0){const s=a+b; a/=s; b/=s; c=0;} return [a,b,c]; }
     function makeGrid(){ const A=[],B=[],C=[]; for(let a=0;a<=1;a+=STEP){ for(let b=0;b<=1-a;b+=STEP){ const [aa,bb,cc]=normalize(a,b); A.push(aa);B.push(bb);C.push(cc);} } return {type:'scatterternary',a:A,b:B,c:C,mode:'markers',marker:{size:2,opacity:0.01},hoverinfo:'skip'}; }
-    function makeUser(){ return {type:'scatterternary',a:[null],b:[null],c:[null],mode:'markers',marker:{size:10,color:'#4060ff'}}; }
-    function layout(){ return {ternary:{sum:1,aaxis:{title:'A'},baxis:{title:'B'},caxis:{title:'C'}},margin:{l:20,r:20,b:20,t:20},showlegend:false}; }
+    function makeUser(){ return {type:'scatterternary',a:[null],b:[null],c:[null],mode:'markers',marker:{size:10}}; }
+    function layout(){ return {ternary:{sum:1,aaxis:{title:'Accountability & Oversight (A)'},baxis:{title:'Community Safety (B)'},caxis:{title:'Civil Liberties & Privacy (C)'}},margin:{l:20,r:20,b:20,t:20},showlegend:false}; }
 
     function initPlot(id,prefix){
-      Plotly.newPlot(id,[makeGrid(),makeUser()],layout(),{displayModeBar:false});
+      Plotly.newPlot(id,[makeGrid(),makeUser()],layout(),{displayModeBar:false, responsive:true});
       const el=document.getElementById(id);
       el.on('plotly_click',e=>{
+        if(!e.points || !e.points.length) return;
         const p=e.points[0]; const a=p.a,b=p.b,c=p.c;
         Plotly.restyle(el,{a:[[a]],b:[[b]],c:[[c]]},[1]);
         document.getElementById(`${prefix}_a`).value=a.toFixed(3);
         document.getElementById(`${prefix}_b`).value=b.toFixed(3);
         document.getElementById(`${prefix}_c`).value=c.toFixed(3);
-        document.getElementById(`${prefix}-readout`).textContent=`A=${(a*100).toFixed(1)}% • B=${(b*100).toFixed(1)}% • C=${(c*100).toFixed(1)}%`;
+        const ro = document.getElementById(`${prefix}-readout`);
+        if(ro) ro.textContent=`A=${(a*100).toFixed(1)}% • B=${(b*100).toFixed(1)}% • C=${(c*100).toFixed(1)}%`;
         updateButton();
       });
     }
